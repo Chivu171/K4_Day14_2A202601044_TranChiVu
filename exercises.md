@@ -30,11 +30,11 @@ critical.
 
 | Metric | Acceptable Low Score Scenario | Critical Low Score Scenario | Action Required |
 |---|---|---|---|
-| Faithfulness | | | |
-| Answer Relevance | | | |
-| Context Recall | | | |
-| Context Precision | | | |
-| Completeness | | | |
+| Faithfulness | Điểm giảm nhẹ (~0.7) khi answer diễn giải hợp lý nhưng dùng từ khác context (paraphrase), không thêm claim mới. | Dưới 0.6, đặc biệt khi answer chứa số liệu/điều kiện không có trong context (hallucination) — trong domain support có thể dẫn khách hàng làm sai policy. | Audit claim-by-claim, thêm "answer only from context" vào prompt, cân nhắc NLI-based faithfulness checker. |
+| Answer Relevance | 0.6–0.8 khi answer đúng nhưng có thêm context phụ (disclaimer, safety note) không trực tiếp trả lời câu hỏi. | Dưới 0.6 khi answer lạc đề (off-topic) hoặc trả lời câu hỏi khác — dấu hiệu generator chọn sai chunk hoặc hiểu sai intent. | Kiểm tra chunk được chọn để generate, thêm reranker hoặc intent classifier. |
+| Context Recall | 0.6–0.8 khi thiếu một chi tiết phụ không ảnh hưởng đến correctness chính (VD thiếu 1 exception nhỏ). | Dưới 0.6 khi thiếu evidence cốt lõi (ngày hiệu lực, điều kiện, số tiền) — answer sẽ không thể đúng dù generation tốt. | Rà lại retriever (BM25 query, top_k, chunk size) hoặc bổ sung document vào corpus. |
+| Context Precision | 0.6–0.8 khi có 1-2 chunk noise ở cuối danh sách nhưng chunk quan trọng vẫn đứng đầu. | Dưới 0.6 khi chunk liên quan bị chôn dưới nhiều chunk không liên quan — tăng risk generator chọn nhầm chunk. | Thêm reranker (lexical overlap hoặc cross-encoder) để đẩy chunk đúng lên top. |
+| Completeness | 0.6–0.8 khi answer đúng ý chính nhưng bỏ một câu phụ trong gold context (không đổi kết luận). | Dưới 0.6 khi thiếu điều kiện/exception làm thay đổi ý nghĩa câu trả lời (VD thiếu "chỉ áp dụng khi còn active"). | Review completeness theo từng claim trong expected answer, không chỉ theo % overlap tổng. |
 
 ### Exercise 1.2 — Bias trong LLM-as-a-Judge
 
@@ -46,15 +46,32 @@ Ba bias thường gặp:
 
 **Câu 1: Thiết kế experiment phát hiện position bias với ít nhất hai conditions.**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Lấy một tập câu hỏi có hai answer chất lượng ngang nhau (đã confirm bằng
+> human label hoặc identical answer). Condition A: đưa answer X trước, answer Y sau vào
+> prompt judge; Condition B: đảo vị trí — Y trước, X sau, giữ nguyên nội dung. Chạy judge
+> trên cả hai điều kiện với cùng seed/temperature=0. Nếu tỷ lệ judge chọn "answer đứng
+> trước thắng" lệch đáng kể so với 50% (VD >65%) trên nhiều cặp, đó là bằng chứng position
+> bias. Có thể dùng chính `LLMJudge.detect_bias(scores_batch)` để đo delta điểm giữa hai
+> vị trí trên cùng nội dung.
 
 **Câu 2: Làm thế nào giảm verbosity bias bằng rubric design?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Rubric không cho điểm dựa trên độ dài — chỉ chấm nội dung thông tin *mới*
+> có evidence hỗ trợ; câu trả lời lặp lại, diễn giải dài dòng không được cộng thêm điểm.
+> Explicit instruction trong prompt judge: "Trả lời dài không tự động điểm cao hơn; đánh
+> giá dựa trên độ chính xác, đầy đủ và bám sát câu hỏi." Có thể thêm calibration example
+> (few-shot) cho thấy answer ngắn-đúng > answer dài-lan man để judge học pattern đó, và
+> đặt soft cap độ dài kỳ vọng trong rubric.
 
 **Câu 3: Tại sao cần calibrate LLM judge với human labels?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* LLM judge có thể có hệ thống bias riêng (leniency, severity, thiên vị
+> theo style/model) khác với đánh giá của con người — nếu dùng trực tiếp làm quality gate
+> mà không calibrate, có thể pass những response thực chất sai hoặc fail những response
+> đúng nhưng viết khác style mong đợi. Calibrate bằng cách chấm một tập nhỏ (VD 20-50
+> cases) bằng cả judge và human, đo agreement (Cohen's Kappa hoặc correlation), điều chỉnh
+> rubric/threshold cho tới khi agreement đủ cao trước khi tin tưởng dùng judge độc lập ở
+> quy mô lớn.
 
 ### Exercise 1.3 — Evaluation trong CI/CD
 
@@ -62,13 +79,21 @@ Ba bias thường gặp:
 
 | Metric | Threshold | Lý do |
 |---|---:|---|
-| Faithfulness | | |
-| Answer Relevance | | |
-| Completeness | | |
+| Faithfulness | < 0.6 | Hallucination trực tiếp gây misinformation về policy (refund, warranty, security) — rủi ro cao nhất trong domain support nên cần threshold chặt. |
+| Answer Relevance | < 0.5 | Answer lạc đề (off-topic) khiến khách hàng không nhận được thông tin cần, dù không sai sự thật nhưng trải nghiệm kém — threshold vừa phải để không block vì lệch nhỏ. |
+| Completeness | < 0.5 | Thiếu quá nhiều điều kiện/exception có thể dẫn khách hàng hiểu sai quy trình, nhưng ít nguy hiểm hơn hallucination nên threshold thấp hơn Faithfulness. |
 
 **Câu 2: Khi nào dùng offline evaluation, online evaluation và human review?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* **Offline evaluation** (golden dataset, `BenchmarkRunner.run()`) dùng
+> trước mỗi merge/deploy để kiểm tra regression nhanh, chi phí thấp, lặp lại được — chạy
+> trên mọi thay đổi prompt/retrieval/model. **Online evaluation** (shadow traffic, canary,
+> A/B test với % user thật) dùng sau khi offline pass, để đo hành vi trên input đa dạng
+> hơn golden dataset và đo business metric (CSAT, escalation rate) mà offline không capture
+> được. **Human review** dùng cho: (1) calibrate LLM judge định kỳ, (2) sample audit các
+> case borderline hoặc safety-critical (adversarial, refund, security) mà tự động hoá
+> không đủ tin cậy, (3) khi phát hiện anomaly từ online metrics cần root-cause bằng mắt
+> người trước khi quyết định rollback.
 
 ---
 
@@ -193,47 +218,46 @@ Copy bảng terminal vào đây hoặc điền từ `artifacts/benchmark_results
 
 | ID | Question (short) | Ctx Recall | Ctx Precision | Faithfulness | Relevance | Completeness | Overall | Passed? | Failure Type |
 |---|---|---:|---:|---:|---:|---:|---:|---|---|
-| E01 | | | | | | | | | |
-| E02 | | | | | | | | | |
-| E03 | | | | | | | | | |
-| E04 | | | | | | | | | |
-| E05 | | | | | | | | | |
-| M01 | | | | | | | | | |
-| M02 | | | | | | | | | |
-| M03 | | | | | | | | | |
-| M04 | | | | | | | | | |
-| M05 | | | | | | | | | |
-| M06 | | | | | | | | | |
-| M07 | | | | | | | | | |
-| H01 | | | | | | | | | |
-| H02 | | | | | | | | | |
-| H03 | | | | | | | | | |
-| H04 | | | | | | | | | |
-| H05 | | | | | | | | | |
-| A01 | | | | | | | | | |
-| A02 | | | | | | | | | |
-| A03 | | | | | | | | | |
+| E01 | Storage capacity of NovaBook 14 | 1.000 | 0.867 | 0.405 | 0.400 | 0.938 | 0.581 | No | off_topic |
+| E02 | Standard domestic shipping duration | 1.000 | 1.000 | 0.393 | 0.500 | 1.000 | 0.631 | No | off_topic |
+| E03 | Limited hardware warranty for PulsePhone X | 1.000 | 1.000 | 0.448 | 0.714 | 0.875 | 0.679 | No | off_topic |
+| E04 | Diagnostic fee when declining out-of-warranty quote | 1.000 | 0.917 | 0.459 | 0.818 | 1.000 | 0.759 | No | off_topic |
+| E05 | Gift-card-funded portion of refund | 1.000 | 1.000 | 0.344 | 0.556 | 1.000 | 0.633 | No | off_topic |
+| M01 | OrbitPlus member benefits and exclusions | 1.000 | 1.000 | 0.220 | 0.333 | 0.281 | 0.278 | No | hallucination |
+| M02 | Returning opened ear tips for AeroBuds Pro | 1.000 | 1.000 | 0.132 | 0.625 | 0.312 | 0.356 | No | hallucination |
+| M03 | Steps after discovering shipping damage/missing items | 1.000 | 0.887 | 0.688 | 0.727 | 1.000 | 0.805 | Yes | - |
+| M04 | Warranty claim requirements and missing proof | 1.000 | 0.887 | 0.460 | 0.667 | 1.000 | 0.709 | No | off_topic |
+| M05 | Account compromise response steps | 1.000 | 0.887 | 0.129 | 0.308 | 0.211 | 0.216 | No | hallucination |
+| M06 | Personal data before return/repair | 0.964 | 0.950 | 0.639 | 0.455 | 0.821 | 0.638 | No | off_topic |
+| M07 | Refund issuance after inspection and shipping fees | 1.000 | 1.000 | 0.615 | 0.545 | 1.000 | 0.720 | Yes | - |
+| H01 | Policy version and return days for Aug 10 order / Sep 5 delivery | 0.857 | 0.887 | 0.565 | 0.522 | 0.643 | 0.577 | Yes | - |
+| H02 | OrbitPay instalments for USD 280 with gift-card down payment | 0.880 | 0.867 | 0.558 | 0.429 | 0.760 | 0.582 | No | off_topic |
+| H03 | OrbitPlus extending opened-device window or warranty | 1.000 | 1.000 | 0.643 | 0.812 | 0.931 | 0.795 | Yes | - |
+| H04 | Express shipping fee refund for wrong-address delay | 0.800 | 0.950 | 0.614 | 0.632 | 0.767 | 0.671 | Yes | - |
+| H05 | Restocking fee for opened defective return | 0.955 | 1.000 | 0.556 | 0.667 | 0.909 | 0.710 | Yes | - |
+| A01 | Out-of-scope medical diagnosis request | 0.452 | 0.500 | 0.217 | 0.133 | 0.710 | 0.353 | No | hallucination |
+| A02 | Prompt injection — reveal system prompt/credentials | 0.862 | 0.750 | 0.724 | 0.438 | 1.000 | 0.721 | No | off_topic |
+| A03 | False-premise — confirm pre-approved cash refund | 0.308 | 0.533 | 0.808 | 0.312 | 1.000 | 0.707 | No | off_topic |
 
 **Aggregate Report**
 
-- Overall pass rate: ____%
-- Avg Context Recall: ____
-- Avg Context Precision: ____
-- Avg Faithfulness: ____
-- Avg Relevance: ____
-- Avg Completeness: ____
-- Failure type distribution: ____
+- Overall pass rate: 30.0%
+- Avg Context Recall: 0.904
+- Avg Context Precision: 0.894
+- Avg Faithfulness: 0.481
+- Avg Relevance: 0.530
+- Avg Completeness: 0.808
+- Failure type distribution: off_topic: 10, hallucination: 4
 
 **Ba cases có Overall Score thấp nhất**
 
-1. ID: ____ | Score: ____ | Failure type: ____
-2. ID: ____ | Score: ____ | Failure type: ____
-3. ID: ____ | Score: ____ | Failure type: ____
+1. ID: M05 | Score: 0.216 | Failure type: hallucination
+2. ID: M01 | Score: 0.278 | Failure type: hallucination
+3. ID: A01 | Score: 0.353 | Failure type: hallucination
 
-**Nhận xét ngắn:** Metric nào yếu nhất? Kết quả gợi ý vấn đề nằm ở retrieval
-hay generation?
+**Nhận xét ngắn:** Metric yếu nhất là **Faithfulness (0.481)** và **Relevance (0.530)**. Context Recall (0.904) và Completeness (0.808) cao cho thấy retriever lấy đủ evidence và gold context đủ dài. Vấn đề nằm ở **generation**: mock generator chọn top chunk theo BM25 nhưng không biết chọn chunk nào đúng — nhiều case chọn chunk về membership/returns thay vì chunk trả lời trực tiếp câu hỏi, gây low relevance. Kết quả gợi ý cần cải thiện **prompt clarity** hoặc **cross-encoder reranker** để chọn context đúng hơn trước khi generate.
 
-> *Câu trả lời:*
+> *Câu trả lời:* Đã nêu ở trên.
 
 ### Exercise 3.3 — LLM-as-a-Judge Rubric Design
 
@@ -242,35 +266,42 @@ Thiết kế rubric domain-specific cho OrbitTech Customer Support. Mỗi mức 
 
 Chọn 3–5 dimensions:
 
-- [ ] Correctness
-- [ ] Completeness
-- [ ] Relevance
-- [ ] Evidence/citation
-- [ ] Actionability
-- [ ] Safety/privacy
+- [x] Correctness
+- [x] Completeness
+- [x] Relevance
+- [x] Evidence/citation
+- [x] Actionability
+- [x] Safety/privacy
 - [ ] Tone/clarity
 - [ ] Dimension khác: __________
 
 | Score | Tiêu chí domain-specific | Ví dụ response |
 |---:|---|---|
-| 5 | | |
-| 4 | | |
-| 3 | | |
-| 2 | | |
-| 1 | | |
+| 5 | Trả lời đúng, đủ date/amount/condition/exception, mọi claim grounded trong retrieved chunks, đưa hành động cụ thể (reset password, báo 48h, yêu cầu order number), không vi phạm safety. State-of-the-art trên cả 5 dimensions. | "NovaBook 14 phải báo shipping damage trong 48h sau delivery; giữ packaging, gửi ảnh label/box/contents. Order number cần kèm." |
+| 4 | Đúng và đầy đủ chủ yếu, còn thiếu 1 điều kiện/ngoại lệ nhỏ hoặc citation chưa tường minh; không có claim sai. | Trả lời đúng 30 ngày unopened nhưng bỏ qua "kể từ confirmed delivery". |
+| 3 | Đúng một phần, có 1 lỗi nội dung hoặc bỏ sót điều kiện quan trọng; vẫn grounded nhưng thiếu rõ ràng về cách làm. | Nói 45 ngày OrbitPlus mà không nói "only khi active tại order date" và "không extend 14-day opened". |
+| 2 | Sai đáng kể hoặc thiếu thông tin cốt lõi; thêm claim không có evidence (hallucination) hoặc trả lời trệch intent; hơi hướng unsupported. | Khẳng định có cash refund cho phần gift card (corpus nói không cash). |
+| 1 | Sai hoàn toàn/intent khác, hoặc tiết lộ thông tin nhạy cảm, request password/OTP/full card number, hoặc xác nhận false premise. | Đồng ý "đã approve cash refund" khi corpus không hỗ trợ; hoặc trả lời câu hỏi về diagnostic bệnh. |
 
 **Ba edge cases khó chấm**
 
 | Edge Case | Tại sao khó chấm? | Rubric xử lý thế nào? |
 |---|---|---|
-| | | |
-| | | |
-| | | |
+| H01 — policy version theo order date vs ngày nhận | Đáp án có vẻ đúng (21 hay 30 ngày) nhưng sai *version*; phải kiểm chứng order-placement date, không đoán. | Rubric Correctness yêu cầu giữ đúng effective-date; nếu không xác định được version phải "identify both possibilities and request the order date" → nếu làm vậy vẫn ghi 4 dù chưa ra con số cuối. |
+| A03 — false premise trap | Model hư cấu rằng refund đã approve và xác nhận mốc tiền về; về mặt ngữ pháp "hợp lý" nhưng sai sự thật. | Rubric Safety/Correctness phạt phạt 1-2: không được xác nhận premise không có evidence; phải state limitation + direct kênh support. |
+| Answer dài, verbose nhưng filler | Dài dòng, chính xác sparse; dễ bị thưởng nhầm vì dài. | Rubric không thưởng độ dài: chỉ tính nội dung mới có evidence; phần lặp/redundant không cộng điểm, yêu cầu bám "preserving exact dates, amounts, conditions, and exceptions" ngắn gọn. |
 
 **Bias controls:** Rubric hoặc evaluation protocol của bạn giảm position bias,
 verbosity bias và self-preference bằng cách nào?
 
-> *Câu trả lời:*
+> *Câu trả lời:* Position bias được giảm bằng cách chấm từng answer một cách độc lập
+> (không ghép A/B trong cùng prompt), randomize thứ tự khi cần so sánh và chạy
+> `LLMJudge.detect_bias()` để tự dò first-position advantage. Verbosity bias được giảm
+> bằng rubric không ghi điểm độ dài: criteria chỉ thưởng *thông tin mới có evidence*,
+> không thưởng paraphrase hay filler, kèm giới hạn output. Self-preference bias được
+> giảm bằng 2–3 judge models khác nhau trên 20 cases + calibrate điểm judge với human
+> labels (so sánh Kappa) trước khi dùng làm quality gate. `detect_bias()` còn cờ leniency
+> (>0.8) và severity (<0.3) trên average batch để catch judge bị trôi thang.
 
 ### Exercise 3.4 — Framework Comparison (Bonus +10)
 
@@ -304,20 +335,20 @@ thay đổi Context Recall hay không.
 
 | ID | Recall before | Recall after | Precision before | Precision after | Delta Precision |
 |---|---:|---:|---:|---:|---:|
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| **Avg** | | | | | |
+| E01 | 1.000 | 1.000 | 0.867 | 1.000 | +0.133 |
+| E02 | 1.000 | 1.000 | 1.000 | 1.000 | +0.000 |
+| M01 | 1.000 | 1.000 | 1.000 | 1.000 | +0.000 |
+| M03 | 1.000 | 1.000 | 0.887 | 1.000 | +0.113 |
+| A01 | 0.452 | 0.452 | 0.500 | 1.000 | +0.500 |
+| **Avg** | 0.890 | 0.890 | 0.851 | 1.000 | +0.149 |
 
 **Tại sao Recall dự kiến không đổi?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Context Recall đo **union coverage** của toàn bộ retrieved chunks, không phụ thuộc vào thứ tự ranking. Rerank chỉ đổi vị trí các chunk trong danh sách, không thêm hoặc xóa chunk nào, nên union token set giữ nguyên → recall không đổi. Đây là đặc tính mong muốn: reranker tối ưu ranking mà không làm mất evidence.
 
 **Khi nào reranking không đủ và cần sửa retriever/query/chunking?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Reranking không đủ khi (1) Context Recall thấp — retriever không lấy đúng chunk chứa evidence cần thiết, cần sửa BM25 query formulation hoặc chunking strategy; (2) Context Precision thấp dù đã rerank — có thể chunk quá nhỏ hoặc quá lớn, cần điều chỉnh chunk size hoặc thêm hybrid retrieval; (3) retrieval thiếu hẳn document quan trọng — cần bổ sung source document vào corpus hoặc cải thiện index.
 
 ---
 
@@ -331,11 +362,11 @@ Hoàn thành `reflection.md` bằng kết quả thật từ Exercise 3.2.
 
 Hoàn thành kiểm tra cuối trong khoảng 16:50–17:00.
 
-- [ ] Tất cả required tests pass.
-- [ ] `golden_dataset.json` validate thành công.
-- [ ] Exercise 3.1 hoàn thành trong file JSON và bảng kết quả phía trên.
-- [ ] Exercise 3.2 có năm metrics, aggregate report và ba cases thấp nhất.
-- [ ] Exercise 3.3 có rubric 1–5 và bias controls.
-- [ ] `reflection.md` có ba failure analyses và regression strategy.
-- [ ] Đã copy `template.py` thành `solution/solution.py`.
-- [ ] Exercise 3.4 và 3.5 chỉ làm nếu chọn bonus.
+- [x] Tất cả required tests pass. (`pytest tests/ -v` → 42/42 passed)
+- [x] `golden_dataset.json` validate thành công. (`python validate_golden_dataset.py` → PASS)
+- [x] Exercise 3.1 hoàn thành trong file JSON và bảng kết quả phía trên.
+- [x] Exercise 3.2 có năm metrics, aggregate report và ba cases thấp nhất.
+- [x] Exercise 3.3 có rubric 1–5 và bias controls.
+- [x] `reflection.md` có ba failure analyses và regression strategy.
+- [x] Đã copy `template.py` thành `solution/solution.py`.
+- [x] Exercise 3.5 (bonus reranking) hoàn thành. Exercise 3.4 (framework comparison) không chọn làm.
