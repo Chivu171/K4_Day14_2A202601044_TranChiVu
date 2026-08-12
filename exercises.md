@@ -308,19 +308,33 @@ verbosity bias và self-preference bằng cách nào?
 Chỉ làm sau khi hoàn thành 3.1–3.3. Chọn hai framework trong RAGAS, DeepEval
 và TruLens; chạy hoặc thiết kế một so sánh có cùng input dataset.
 
-| Tiêu chí | Framework 1: ____ | Framework 2: ____ |
+**Ghi chú phương pháp:** Môi trường lab không có network access để cài `ragas`/`deepeval`
+qua pip, nên đây là **so sánh thiết kế** (design-level), áp dụng định nghĩa metric chính
+thức của từng framework lên cùng 20-case golden dataset và `artifacts/actual_answers.json`
+đã có trong repo, đối chiếu với kết quả word-overlap hiện tại trong
+`artifacts/benchmark_results.json`.
+
+| Tiêu chí | Framework 1: RAGAS | Framework 2: DeepEval |
 |---|---|---|
-| Setup complexity | | |
-| Metrics available | | |
-| CI/CD integration | | |
-| Kết quả trên cùng dataset | | |
-| Insight rút ra | | |
+| Setup complexity | `pip install ragas`; cần wrap dataset thành HuggingFace `Dataset` với cột `question/answer/contexts/ground_truth`; cần LLM + embedding client (mặc định OpenAI) để chấm — không chạy offline được nếu không có API key. | `pip install deepeval`; dùng class `LLMTestCase` per-case, không cần convert sang `Dataset` object; có sẵn `deepeval test run` tích hợp pytest ngay, và hỗ trợ metric tự chọn model chấm (kể cả local model qua `DeepEvalBaseLLM`). |
+| Metrics available | `faithfulness`, `answer_relevancy`, `context_recall`, `context_precision`, `context_entity_recall`, `answer_correctness`, `answer_similarity` — tên trùng khớp gần như 1-1 với 5 metric đã tự cài trong `RAGASEvaluator` của lab này. | `FaithfulnessMetric`, `AnswerRelevancyMetric`, `ContextualRecallMetric`, `ContextualPrecisionMetric`, cộng thêm `HallucinationMetric`, `BiasMetric`, `ToxicityMetric`, `GEval` (custom rubric tự do) — phạm vi rộng hơn cho safety/adversarial testing. |
+| CI/CD integration | Không có runner riêng; phải tự viết script gọi `evaluate()` rồi assert threshold trong CI (tương tự cách `run_regression()` được viết trong `template.py`). | Tích hợp sẵn với pytest (`deepeval test run test_file.py`) và có Confident AI dashboard để track regression theo thời gian — gần với mô hình quality-gate mà Exercise 1.3/5 mô tả. |
+| Kết quả trên cùng dataset | Áp định nghĩa faithfulness của RAGAS (LLM tách answer thành statements rồi verify từng statement với context bằng LLM call) lên 3 case tệ nhất (M05, M01, A01): dự kiến faithfulness **thấp tương tự** word-overlap hiện tại (M05, M01 đều lạc hẳn chunk) vì đây là lỗi generation rõ ràng, không phải lỗi đo lường — cả LLM-based lẫn word-overlap đều bắt được. | Áp `FaithfulnessMetric` của DeepEval (cũng LLM-based, tách claim rồi verify) lên cùng 3 case: dự kiến **tương tự RAGAS** cho M05/M01, nhưng A01 (correct refusal, chỉ khác wording) dự kiến điểm **cao hơn hẳn** word-overlap 0.217 hiện tại vì cả RAGAS và DeepEval dùng LLM để so khớp *ý nghĩa*, không phải token overlap. |
+| Insight rút ra | RAGAS là baseline gần nhất với thiết kế lab này (metric definitions trùng tên), phù hợp nếu team muốn giữ terminology quen thuộc; chi phí là mỗi metric = nhiều LLM call → chậm và tốn hơn cho benchmark tần suất cao. | DeepEval phù hợp hơn cho CI/CD thực tế nhờ pytest-native integration và bộ safety metric (Bias/Toxicity) hữu ích cho case A01–A03 adversarial; nhược điểm là ontology metric riêng, cần map lại với ngôn ngữ RAGAS đã dùng trong report hiện tại. |
 
-- Scores có nhất quán không?
-- Framework nào strict hơn và vì sao?
-- Hai framework có tìm ra cùng failure cases không?
+- **Scores có nhất quán không?** Dự kiến nhất quán ở các case lỗi rõ ràng (M01, M05 — sai chunk hoàn toàn) vì cả hai đều LLM-based và sẽ phát hiện claim không được context hỗ trợ. Có thể **lệch nhau** ở case borderline như A01, nơi câu trả lời đúng hành vi nhưng khác wording — cả RAGAS và DeepEval dự kiến chấm cao hơn nhiều so với word-overlap (0.217→~0.7-0.8) vì hiểu ngữ nghĩa, nhưng điểm tuyệt đối giữa RAGAS và DeepEval vẫn có thể khác nhau do khác prompt template chấm nội bộ.
+- **Framework nào strict hơn và vì sao?** RAGAS thường bị coi là strict hơn ở faithfulness vì nó tách answer thành atomic statements rồi yêu cầu *từng* statement có evidence trực tiếp — một câu tổng hợp hợp lý từ nhiều context riêng lẻ vẫn có thể bị trừ điểm nếu không có evidence "hợp nhất" rõ ràng. DeepEval's `GEval` cho phép rubric tự do (giống `LLMJudge` trong lab này), nên độ strict phụ thuộc rubric người dùng viết hơn là mặc định của framework.
+- **Hai framework có tìm ra cùng failure cases không?** Dự kiến **có** cho các lỗi generation nghiêm trọng (M01, M02, M05 — chọn sai chunk hoàn toàn, cả hai LLM-based framework đều sẽ flag faithfulness/relevance thấp). Có thể **khác nhau** ở các case như H01/H02 (đúng một phần, sai version/điều kiện) — độ nhạy với lỗi "một phần đúng" phụ thuộc cách mỗi framework break down statement, nên một framework có thể coi case "pass" trong khi framework kia "fail" ở ranh giới threshold.
 
-> *Phân tích:*
+> *Phân tích:* Cả hai framework đều dùng LLM-as-judge nên chia sẻ điểm mạnh chung so với
+> word-overlap hiện tại của lab: hiểu paraphrase và correct-refusal behavior (giải quyết
+> đúng vấn đề đã nêu ở A01 trong reflection.md — "word-overlap heuristic phạt nhầm câu
+> trả lời đúng"). Tuy nhiên cả hai đều tốn chi phí/API call hơn nhiều so với heuristic nội
+> bộ đã viết trong `template.py`, và đều cần calibrate với human label (Exercise 1.2, Câu 3)
+> trước khi tin làm quality gate. Với OrbitTech, đề xuất dùng **word-overlap của lab này
+> làm lightweight CI smoke test** (nhanh, free, đủ bắt lỗi generation nghiêm trọng như
+> M01/M05) và **DeepEval làm gate chính thức trước production** nhờ pytest-native CI
+> integration và bộ safety metric (Bias/Toxicity) cần thiết cho các case adversarial A01–A03.
 
 ### Exercise 3.5 — Retrieval Reranking (Bonus +5)
 
@@ -369,4 +383,5 @@ Hoàn thành kiểm tra cuối trong khoảng 16:50–17:00.
 - [x] Exercise 3.3 có rubric 1–5 và bias controls.
 - [x] `reflection.md` có ba failure analyses và regression strategy.
 - [x] Đã copy `template.py` thành `solution/solution.py`.
-- [x] Exercise 3.5 (bonus reranking) hoàn thành. Exercise 3.4 (framework comparison) không chọn làm.
+- [x] Exercise 3.4 (bonus framework comparison: RAGAS vs DeepEval, thiết kế) hoàn thành.
+- [x] Exercise 3.5 (bonus reranking) hoàn thành.
