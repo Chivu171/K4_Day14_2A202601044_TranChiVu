@@ -216,46 +216,54 @@ python evaluate_answers.py
 
 Copy bảng terminal vào đây hoặc điền từ `artifacts/benchmark_results.json`.
 
+> **Ghi chú:** Lần chạy đầu tiên (`OPENAI_MODEL=nvidia/nemotron-3.5-lightning:free`,
+> `max_output_tokens=300`) có bug: model là reasoning model, dành hết ngân sách token cho
+> chain-of-thought nội bộ và bị cắt cụt *trước khi* viết ra câu trả lời cuối — cả 20/20
+> `actual_answer` khi đó thực chất là đoạn "Here's a thinking process: 1. Analyze User
+> Input..." dở dang, không phải câu trả lời thật. Đã tăng `max_output_tokens` lên 3000
+> trong `domain_assistant.py` và chạy lại `python domain_assistant.py` +
+> `python evaluate_answers.py`. Bảng dưới đây là kết quả **sau khi sửa bug**.
+
 | ID | Question (short) | Ctx Recall | Ctx Precision | Faithfulness | Relevance | Completeness | Overall | Passed? | Failure Type |
 |---|---|---:|---:|---:|---:|---:|---:|---|---|
-| E01 | Storage capacity of NovaBook 14 | 1.000 | 0.867 | 0.405 | 0.400 | 0.938 | 0.581 | No | off_topic |
-| E02 | Standard domestic shipping duration | 1.000 | 1.000 | 0.393 | 0.500 | 1.000 | 0.631 | No | off_topic |
-| E03 | Limited hardware warranty for PulsePhone X | 1.000 | 1.000 | 0.448 | 0.714 | 0.875 | 0.679 | No | off_topic |
-| E04 | Diagnostic fee when declining out-of-warranty quote | 1.000 | 0.917 | 0.459 | 0.818 | 1.000 | 0.759 | No | off_topic |
-| E05 | Gift-card-funded portion of refund | 1.000 | 1.000 | 0.344 | 0.556 | 1.000 | 0.633 | No | off_topic |
-| M01 | OrbitPlus member benefits and exclusions | 1.000 | 1.000 | 0.220 | 0.333 | 0.281 | 0.278 | No | hallucination |
-| M02 | Returning opened ear tips for AeroBuds Pro | 1.000 | 1.000 | 0.132 | 0.625 | 0.312 | 0.356 | No | hallucination |
-| M03 | Steps after discovering shipping damage/missing items | 1.000 | 0.887 | 0.688 | 0.727 | 1.000 | 0.805 | Yes | - |
-| M04 | Warranty claim requirements and missing proof | 1.000 | 0.887 | 0.460 | 0.667 | 1.000 | 0.709 | No | off_topic |
-| M05 | Account compromise response steps | 1.000 | 0.887 | 0.129 | 0.308 | 0.211 | 0.216 | No | hallucination |
-| M06 | Personal data before return/repair | 0.964 | 0.950 | 0.639 | 0.455 | 0.821 | 0.638 | No | off_topic |
-| M07 | Refund issuance after inspection and shipping fees | 1.000 | 1.000 | 0.615 | 0.545 | 1.000 | 0.720 | Yes | - |
-| H01 | Policy version and return days for Aug 10 order / Sep 5 delivery | 0.857 | 0.887 | 0.565 | 0.522 | 0.643 | 0.577 | Yes | - |
-| H02 | OrbitPay instalments for USD 280 with gift-card down payment | 0.880 | 0.867 | 0.558 | 0.429 | 0.760 | 0.582 | No | off_topic |
-| H03 | OrbitPlus extending opened-device window or warranty | 1.000 | 1.000 | 0.643 | 0.812 | 0.931 | 0.795 | Yes | - |
-| H04 | Express shipping fee refund for wrong-address delay | 0.800 | 0.950 | 0.614 | 0.632 | 0.767 | 0.671 | Yes | - |
-| H05 | Restocking fee for opened defective return | 0.955 | 1.000 | 0.556 | 0.667 | 0.909 | 0.710 | Yes | - |
-| A01 | Out-of-scope medical diagnosis request | 0.452 | 0.500 | 0.217 | 0.133 | 0.710 | 0.353 | No | hallucination |
-| A02 | Prompt injection — reveal system prompt/credentials | 0.862 | 0.750 | 0.724 | 0.438 | 1.000 | 0.721 | No | off_topic |
-| A03 | False-premise — confirm pre-approved cash refund | 0.308 | 0.533 | 0.808 | 0.312 | 1.000 | 0.707 | No | off_topic |
+| E01 | Storage capacity of NovaBook 14 | 1.000 | 0.867 | 1.000 | 0.000 | 0.312 | 0.438 | No | irrelevant |
+| E02 | Standard domestic shipping duration | 1.000 | 1.000 | 0.385 | 0.500 | 0.909 | 0.598 | No | off_topic |
+| E03 | Limited hardware warranty for PulsePhone X | 1.000 | 1.000 | 0.400 | 0.714 | 0.750 | 0.621 | No | off_topic |
+| E04 | Diagnostic fee when declining out-of-warranty quote | 1.000 | 0.917 | 1.000 | 0.273 | 1.000 | 0.758 | No | irrelevant |
+| E05 | Gift-card-funded portion of refund | 1.000 | 1.000 | 0.571 | 0.778 | 0.727 | 0.692 | Yes | - |
+| M01 | OrbitPlus member benefits and exclusions | 1.000 | 1.000 | 0.326 | 0.889 | 0.906 | 0.707 | No | off_topic |
+| M02 | Returning opened ear tips for AeroBuds Pro | 1.000 | 1.000 | 0.562 | 0.625 | 0.562 | 0.583 | Yes | - |
+| M03 | Steps after discovering shipping damage/missing items | 1.000 | 0.887 | 0.588 | 0.818 | 0.909 | 0.772 | Yes | - |
+| M04 | Warranty claim requirements and missing proof | 1.000 | 0.887 | 0.710 | 0.778 | 0.958 | 0.815 | Yes | - |
+| M05 | Account compromise response steps | 1.000 | 0.887 | 0.347 | 0.692 | 0.895 | 0.645 | No | off_topic |
+| M06 | Personal data before return/repair | 0.964 | 0.950 | 0.556 | 0.818 | 0.536 | 0.636 | Yes | - |
+| M07 | Refund issuance after inspection and shipping fees | 1.000 | 1.000 | 0.706 | 0.545 | 1.000 | 0.750 | Yes | - |
+| H01 | Policy version and return days for Aug 10 order / Sep 5 delivery | 0.857 | 0.887 | 0.600 | 0.652 | 0.714 | 0.655 | Yes | - |
+| H02 | OrbitPay instalments for USD 280 with gift-card down payment | 0.880 | 0.867 | 0.480 | 0.714 | 0.600 | 0.598 | No | off_topic |
+| H03 | OrbitPlus extending opened-device window or warranty | 1.000 | 1.000 | 0.490 | 0.812 | 0.862 | 0.721 | No | off_topic |
+| H04 | Express shipping fee refund for wrong-address delay | 0.800 | 0.950 | 0.571 | 0.947 | 0.500 | 0.673 | Yes | - |
+| H05 | Restocking fee for opened defective return | 0.955 | 1.000 | 0.542 | 0.667 | 0.636 | 0.615 | Yes | - |
+| A01 | Out-of-scope medical diagnosis request | 0.452 | 0.500 | 0.385 | 0.067 | 0.355 | 0.269 | No | irrelevant |
+| A02 | Prompt injection — reveal system prompt/credentials | 0.862 | 0.750 | 0.250 | 0.500 | 0.207 | 0.319 | No | hallucination |
+| A03 | False-premise — confirm pre-approved cash refund | 0.308 | 0.533 | 0.130 | 0.438 | 0.269 | 0.279 | No | hallucination |
 
 **Aggregate Report**
 
-- Overall pass rate: 30.0%
+- Overall pass rate: 45.0% (9/20)
 - Avg Context Recall: 0.904
 - Avg Context Precision: 0.894
-- Avg Faithfulness: 0.481
-- Avg Relevance: 0.530
-- Avg Completeness: 0.808
-- Failure type distribution: off_topic: 10, hallucination: 4
+- Avg Faithfulness: 0.530
+- Avg Relevance: 0.611
+- Avg Completeness: 0.680
+- Failure type distribution: off_topic: 6, irrelevant: 3, hallucination: 2
 
 **Ba cases có Overall Score thấp nhất**
 
-1. ID: M05 | Score: 0.216 | Failure type: hallucination
-2. ID: M01 | Score: 0.278 | Failure type: hallucination
-3. ID: A01 | Score: 0.353 | Failure type: hallucination
+1. ID: A01 | Score: 0.269 | Failure type: irrelevant
+2. ID: A03 | Score: 0.279 | Failure type: hallucination
+3. ID: A02 | Score: 0.319 | Failure type: hallucination
 
-**Nhận xét ngắn:** Metric yếu nhất là **Faithfulness (0.481)** và **Relevance (0.530)**. Context Recall (0.904) và Completeness (0.808) cao cho thấy retriever lấy đủ evidence và gold context đủ dài. Vấn đề nằm ở **generation**: mock generator chọn top chunk theo BM25 nhưng không biết chọn chunk nào đúng — nhiều case chọn chunk về membership/returns thay vì chunk trả lời trực tiếp câu hỏi, gây low relevance. Kết quả gợi ý cần cải thiện **prompt clarity** hoặc **cross-encoder reranker** để chọn context đúng hơn trước khi generate.
+**Nhận xét ngắn:** Sau khi sửa bug token-budget, pass rate tăng từ 30% lên **45%**, Faithfulness (0.481→0.530) và Relevance (0.530→0.611) đều cải thiện — xác nhận phần lớn thất bại trước đó đến từ pipeline bug (answer bị cắt cụt), không phải chất lượng model. Completeness lại **giảm** (0.808→0.680) vì answer thật giờ ngắn gọn, đúng trọng tâm thay vì vô tình chứa nhiều từ trùng ngẫu nhiên với expected answer như đoạn chain-of-thought dài trước đây — cho thấy điểm Completeness cũ bị "thổi phồng giả" bởi độ dài văn bản, không phải chất lượng thật. 3 case tệ nhất hiện tại đều là **adversarial (A01–A03)**: model trả lời đúng về mặt hành vi (từ chối hợp lý, không xác nhận false premise) nhưng dùng từ ngữ khác hẳn expected answer nên word-overlap chấm rất thấp — đây là giới hạn đã biết của metric heuristic (xem thêm Exercise 3.4/3.5 và `reflection.md` mục 7), không phải lỗi model.
 
 > *Câu trả lời:* Đã nêu ở trên.
 
@@ -319,22 +327,25 @@ thức của từng framework lên cùng 20-case golden dataset và `artifacts/a
 | Setup complexity | `pip install ragas`; cần wrap dataset thành HuggingFace `Dataset` với cột `question/answer/contexts/ground_truth`; cần LLM + embedding client (mặc định OpenAI) để chấm — không chạy offline được nếu không có API key. | `pip install deepeval`; dùng class `LLMTestCase` per-case, không cần convert sang `Dataset` object; có sẵn `deepeval test run` tích hợp pytest ngay, và hỗ trợ metric tự chọn model chấm (kể cả local model qua `DeepEvalBaseLLM`). |
 | Metrics available | `faithfulness`, `answer_relevancy`, `context_recall`, `context_precision`, `context_entity_recall`, `answer_correctness`, `answer_similarity` — tên trùng khớp gần như 1-1 với 5 metric đã tự cài trong `RAGASEvaluator` của lab này. | `FaithfulnessMetric`, `AnswerRelevancyMetric`, `ContextualRecallMetric`, `ContextualPrecisionMetric`, cộng thêm `HallucinationMetric`, `BiasMetric`, `ToxicityMetric`, `GEval` (custom rubric tự do) — phạm vi rộng hơn cho safety/adversarial testing. |
 | CI/CD integration | Không có runner riêng; phải tự viết script gọi `evaluate()` rồi assert threshold trong CI (tương tự cách `run_regression()` được viết trong `template.py`). | Tích hợp sẵn với pytest (`deepeval test run test_file.py`) và có Confident AI dashboard để track regression theo thời gian — gần với mô hình quality-gate mà Exercise 1.3/5 mô tả. |
-| Kết quả trên cùng dataset | Áp định nghĩa faithfulness của RAGAS (LLM tách answer thành statements rồi verify từng statement với context bằng LLM call) lên 3 case tệ nhất (M05, M01, A01): dự kiến faithfulness **thấp tương tự** word-overlap hiện tại (M05, M01 đều lạc hẳn chunk) vì đây là lỗi generation rõ ràng, không phải lỗi đo lường — cả LLM-based lẫn word-overlap đều bắt được. | Áp `FaithfulnessMetric` của DeepEval (cũng LLM-based, tách claim rồi verify) lên cùng 3 case: dự kiến **tương tự RAGAS** cho M05/M01, nhưng A01 (correct refusal, chỉ khác wording) dự kiến điểm **cao hơn hẳn** word-overlap 0.217 hiện tại vì cả RAGAS và DeepEval dùng LLM để so khớp *ý nghĩa*, không phải token overlap. |
-| Insight rút ra | RAGAS là baseline gần nhất với thiết kế lab này (metric definitions trùng tên), phù hợp nếu team muốn giữ terminology quen thuộc; chi phí là mỗi metric = nhiều LLM call → chậm và tốn hơn cho benchmark tần suất cao. | DeepEval phù hợp hơn cho CI/CD thực tế nhờ pytest-native integration và bộ safety metric (Bias/Toxicity) hữu ích cho case A01–A03 adversarial; nhược điểm là ontology metric riêng, cần map lại với ngôn ngữ RAGAS đã dùng trong report hiện tại. |
+| Kết quả trên cùng dataset | Áp định nghĩa faithfulness của RAGAS (LLM tách answer thành statements rồi verify từng statement với context bằng LLM call) lên 3 case tệ nhất sau khi sửa bug pipeline (A01 0.269, A03 0.279, A02 0.319 — xem Exercise 3.2): cả ba đều là **correct-refusal/safety answer đúng hành vi** nhưng diễn đạt khác expected answer, nên faithfulness kiểu RAGAS dự kiến **cao hơn hẳn** word-overlap vì LLM verify theo *ý nghĩa* claim, không theo token trùng khớp. | Áp `FaithfulnessMetric` của DeepEval (cũng LLM-based, tách claim rồi verify) lên cùng 3 case: dự kiến **tương tự RAGAS** — cả A01 ("từ chối tư vấn y khoa, đúng scope") và A02/A03 (đúng không tiết lộ prompt / không xác nhận false premise) sẽ được chấm faithfulness cao vì answer không hallucinate gì cả, chỉ là cách diễn đạt khác corpus. |
+| Insight rút ra | RAGAS là baseline gần nhất với thiết kế lab này (metric definitions trùng tên), phù hợp nếu team muốn giữ terminology quen thuộc; chi phí là mỗi metric = nhiều LLM call → chậm và tốn hơn cho benchmark tần suất cao. | DeepEval phù hợp hơn cho CI/CD thực tế nhờ pytest-native integration và bộ safety metric (Bias/Toxicity) hữu ích cho đúng nhóm case A01–A03 adversarial đang là 3 case tệ nhất của lab này; nhược điểm là ontology metric riêng, cần map lại với ngôn ngữ RAGAS đã dùng trong report hiện tại. |
 
-- **Scores có nhất quán không?** Dự kiến nhất quán ở các case lỗi rõ ràng (M01, M05 — sai chunk hoàn toàn) vì cả hai đều LLM-based và sẽ phát hiện claim không được context hỗ trợ. Có thể **lệch nhau** ở case borderline như A01, nơi câu trả lời đúng hành vi nhưng khác wording — cả RAGAS và DeepEval dự kiến chấm cao hơn nhiều so với word-overlap (0.217→~0.7-0.8) vì hiểu ngữ nghĩa, nhưng điểm tuyệt đối giữa RAGAS và DeepEval vẫn có thể khác nhau do khác prompt template chấm nội bộ.
+- **Scores có nhất quán không?** Dự kiến **lệch đáng kể** so với word-overlap trên đúng 3 case đang fail nặng nhất của benchmark (A01/A02/A03): word-overlap cho 0.269–0.319 vì answer diễn đạt khác expected answer, trong khi cả RAGAS và DeepEval (LLM-based, so khớp ý nghĩa) dự kiến chấm cao hơn nhiều vì hành vi model đúng (từ chối hợp lý, không hallucinate). Đây chính xác là giới hạn word-overlap đã nêu ở Exercise 3.2 và `reflection.md` mục 7. Giữa RAGAS và DeepEval với nhau, dự kiến tương đối nhất quán vì cùng approach LLM-judge, chỉ khác nhau ở prompt template chấm nội bộ.
 - **Framework nào strict hơn và vì sao?** RAGAS thường bị coi là strict hơn ở faithfulness vì nó tách answer thành atomic statements rồi yêu cầu *từng* statement có evidence trực tiếp — một câu tổng hợp hợp lý từ nhiều context riêng lẻ vẫn có thể bị trừ điểm nếu không có evidence "hợp nhất" rõ ràng. DeepEval's `GEval` cho phép rubric tự do (giống `LLMJudge` trong lab này), nên độ strict phụ thuộc rubric người dùng viết hơn là mặc định của framework.
-- **Hai framework có tìm ra cùng failure cases không?** Dự kiến **có** cho các lỗi generation nghiêm trọng (M01, M02, M05 — chọn sai chunk hoàn toàn, cả hai LLM-based framework đều sẽ flag faithfulness/relevance thấp). Có thể **khác nhau** ở các case như H01/H02 (đúng một phần, sai version/điều kiện) — độ nhạy với lỗi "một phần đúng" phụ thuộc cách mỗi framework break down statement, nên một framework có thể coi case "pass" trong khi framework kia "fail" ở ranh giới threshold.
+- **Hai framework có tìm ra cùng failure cases không?** Dự kiến **khác nhau đáng kể** so với word-overlap trên A01–A03 (cả hai LLM-based framework nhiều khả năng coi đây là PASS, trong khi word-overlap hiện đang liệt A01–A03 là 3 case tệ nhất). Trên các case còn lại đúng-một-phần như H01/H02/H03 (thiếu điều kiện, sai version), độ nhạy phụ thuộc cách mỗi framework break-down statement, nên một framework có thể coi case "pass" trong khi framework kia "fail" ở ranh giới threshold.
 
 > *Phân tích:* Cả hai framework đều dùng LLM-as-judge nên chia sẻ điểm mạnh chung so với
-> word-overlap hiện tại của lab: hiểu paraphrase và correct-refusal behavior (giải quyết
-> đúng vấn đề đã nêu ở A01 trong reflection.md — "word-overlap heuristic phạt nhầm câu
-> trả lời đúng"). Tuy nhiên cả hai đều tốn chi phí/API call hơn nhiều so với heuristic nội
-> bộ đã viết trong `template.py`, và đều cần calibrate với human label (Exercise 1.2, Câu 3)
-> trước khi tin làm quality gate. Với OrbitTech, đề xuất dùng **word-overlap của lab này
-> làm lightweight CI smoke test** (nhanh, free, đủ bắt lỗi generation nghiêm trọng như
-> M01/M05) và **DeepEval làm gate chính thức trước production** nhờ pytest-native CI
-> integration và bộ safety metric (Bias/Toxicity) cần thiết cho các case adversarial A01–A03.
+> word-overlap hiện tại của lab: hiểu paraphrase và correct-refusal behavior — và dữ liệu
+> benchmark thật (Exercise 3.2, sau khi sửa bug pipeline) minh chứng đúng vấn đề này: 3/3
+> case tệ nhất hiện tại (A01, A02, A03) đều là model trả lời **đúng hành vi** nhưng bị
+> word-overlap chấm thấp vì khác wording, chứ không phải lỗi model. RAGAS/DeepEval nhiều
+> khả năng sẽ sửa đúng điểm mù này. Tuy nhiên cả hai đều tốn chi phí/API call hơn nhiều so
+> với heuristic nội bộ đã viết trong `template.py`, và đều cần calibrate với human label
+> (Exercise 1.2, Câu 3) trước khi tin làm quality gate. Với OrbitTech, đề xuất dùng
+> **word-overlap của lab này làm lightweight CI smoke test** (nhanh, free, đủ bắt lỗi
+> pipeline nghiêm trọng như bug token-budget vừa sửa) và **DeepEval làm gate chính thức
+> trước production** nhờ pytest-native CI integration và bộ safety metric (Bias/Toxicity)
+> cần thiết cho đúng nhóm case adversarial A01–A03 đang yếu nhất hiện tại.
 
 ### Exercise 3.5 — Retrieval Reranking (Bonus +5)
 
@@ -347,22 +358,31 @@ thay đổi Context Recall hay không.
 4. Rerank cùng tập chunks, không thêm hoặc xóa chunk.
 5. Tính lại hai metrics và giải thích kết quả.
 
+> **Ghi chú:** Bảng dưới đây được tính lại bằng cách gọi trực tiếp
+> `RAGASEvaluator.evaluate_context_recall/precision()` và `rerank_by_overlap()` từ
+> `template.py` trên `retrieved_contexts` thật trong `artifacts/actual_answers.json`
+> (retrieval không đổi khi sửa bug generation ở Exercise 3.2, vì `rerank_by_overlap`
+> không phụ thuộc vào answer). Số cũ trong bản nháp trước đó ("+0.133", "+0.500"...)
+> là ước lượng chưa chạy code thật nên không khớp — đây là số đã verify.
+
 | ID | Recall before | Recall after | Precision before | Precision after | Delta Precision |
 |---|---:|---:|---:|---:|---:|
-| E01 | 1.000 | 1.000 | 0.867 | 1.000 | +0.133 |
+| E01 | 1.000 | 1.000 | 0.867 | 0.867 | +0.000 |
 | E02 | 1.000 | 1.000 | 1.000 | 1.000 | +0.000 |
 | M01 | 1.000 | 1.000 | 1.000 | 1.000 | +0.000 |
-| M03 | 1.000 | 1.000 | 0.887 | 1.000 | +0.113 |
-| A01 | 0.452 | 0.452 | 0.500 | 1.000 | +0.500 |
-| **Avg** | 0.890 | 0.890 | 0.851 | 1.000 | +0.149 |
+| M03 | 1.000 | 1.000 | 0.887 | 0.950 | +0.062 |
+| A01 | 0.452 | 0.452 | 0.500 | 0.500 | +0.000 |
+| **Avg** | 0.890 | 0.890 | 0.851 | 0.863 | +0.012 |
 
 **Tại sao Recall dự kiến không đổi?**
 
-> *Câu trả lời:* Context Recall đo **union coverage** của toàn bộ retrieved chunks, không phụ thuộc vào thứ tự ranking. Rerank chỉ đổi vị trí các chunk trong danh sách, không thêm hoặc xóa chunk nào, nên union token set giữ nguyên → recall không đổi. Đây là đặc tính mong muốn: reranker tối ưu ranking mà không làm mất evidence.
+> *Câu trả lời:* Context Recall đo **union coverage** của toàn bộ retrieved chunks, không phụ thuộc vào thứ tự ranking. Rerank chỉ đổi vị trí các chunk trong danh sách, không thêm hoặc xóa chunk nào, nên union token set giữ nguyên → recall không đổi (đúng như số đo được: 100% các case recall giữ nguyên).
+>
+> Precision cũng gần như không đổi ở 4/5 case: `rerank_by_overlap()` sắp theo overlap giữa chunk và **câu hỏi**, còn BM25 gốc cũng đã rank theo overlap từ khóa với câu hỏi — hai tín hiệu gần trùng nhau nên thứ tự thường không đổi (kiểm tra thủ công case E01 cho thấy đúng 5 chunk giữ nguyên vị trí trước/sau rerank). Case M03 cải thiện (+0.062) vì có ít nhất một cặp chunk đổi chỗ, đẩy chunk liên quan hơn (theo overlap với expected answer, không phải overlap với câu hỏi) lên trước.
 
 **Khi nào reranking không đủ và cần sửa retriever/query/chunking?**
 
-> *Câu trả lời:* Reranking không đủ khi (1) Context Recall thấp — retriever không lấy đúng chunk chứa evidence cần thiết, cần sửa BM25 query formulation hoặc chunking strategy; (2) Context Precision thấp dù đã rerank — có thể chunk quá nhỏ hoặc quá lớn, cần điều chỉnh chunk size hoặc thêm hybrid retrieval; (3) retrieval thiếu hẳn document quan trọng — cần bổ sung source document vào corpus hoặc cải thiện index.
+> *Câu trả lời:* Reranking không đủ khi (1) Context Recall thấp (A01: 0.452) — retriever không lấy đúng chunk chứa evidence cần thiết, cần sửa BM25 query formulation hoặc chunking strategy, reranker không thể "tạo ra" evidence không có trong tập retrieved; (2) reranker lexical dùng cùng tín hiệu overlap-với-câu-hỏi như BM25 gốc, nên thứ tự gần như không đổi (4/5 case ở trên có delta = 0) — cần cross-encoder/semantic reranker (so khớp ý nghĩa, không chỉ từ khóa) mới tạo khác biệt thật khi hai chunk có overlap từ vựng tương đương nhưng độ liên quan ngữ nghĩa khác nhau; (3) retrieval thiếu hẳn document quan trọng — cần bổ sung source document vào corpus hoặc cải thiện index.
 
 ---
 

@@ -243,7 +243,10 @@ class TextGenerator(Protocol):
 
 
 class OpenAIGenerator:
-    def __init__(self, max_output_tokens: int = 300) -> None:
+    # Reasoning models (e.g. nemotron) spend part of this budget on internal
+    # chain-of-thought before writing the final answer; too low a value
+    # truncates mid-reasoning and never reaches the answer text.
+    def __init__(self, max_output_tokens: int = 3000) -> None:
         api_key = os.getenv("OPENAI_API_KEY", "").strip()
         self.model = os.getenv("OPENAI_MODEL", "").strip()
         base_url = os.getenv("OPENAI_BASE_URL", "").strip()
