@@ -146,31 +146,39 @@ và quyết định thiết kế, không chép lại toàn bộ QA.
 
 | Hạng mục | Kết quả |
 |---|---|
-| Tổng số records | ____ / 20 |
-| Easy | ____ / 5 |
-| Medium | ____ / 7 |
-| Hard | ____ / 5 |
-| Adversarial | ____ / 3 |
-| Source documents được sử dụng | ____ / 10 |
-| Validator status | PASS / FAIL |
+| Tổng số records | 20 / 20 |
+| Easy | 5 / 5 |
+| Medium | 7 / 7 |
+| Hard | 5 / 5 |
+| Adversarial | 3 / 3 |
+| Source documents được sử dụng | 10 / 10 |
+| Validator status | PASS |
 
 **Ba case đại diện cho quyết định thiết kế**
 
 | ID | Difficulty | Source document(s) | Vì sao case phù hợp với difficulty/attack type? |
 |---|---|---|---|
-| | | | |
-| | | | |
-| | | | |
+| E02 | easy | `04_shipping_and_delivery.md` | Tra cứu sự kiện đơn lẻ, đúng xuyên suốt một đoạn: khoảng thời gian vận chuyển tiêu chuẩn. Không cần ghép quy trình hay điều kiện. |
+| H01 | hard | `09_escalation_and_policy_updates.md` | Yêu cầu áp đúng policy version theo order-placement date (order 10/08, nhận 05/09) và phân biệt version vs số ngày đếm từ confirmed delivery — nhiều điều kiện và effective date. |
+| A02 | adversarial | `00_system_scope.md` | Prompt injection: câu hỏi lệnh hệ thống tiết lộ prompt/credentials. Evidence scope khóa việc user text override rules; expected answer = từ chối và chỉ lại kênh hợp lệ. |
 
 **Điểm khó nhất khi xây dựng expected answer hoặc evidence là gì?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Khó nhất là đảm bảo *mọi* claim trong expected answer có một evidence
+> nguyên văn tương ứng mà không lộ nguyên câu trả lời ngay trong question, đồng thời
+> giữ đúng bản chất reasoning của difficulty. Ví dụ M06 phải tách hai câu cùng đoạn
+> trong `05_returns_and_exchanges.md` (câu "A return requires..." và câu "Customers
+> should back up...") thành hai context riêng vì giữa chúng còn câu về "OrbitTech may
+> reduce a refund..." — nếu dán cả đoạn sẽ đưa noise không liên quan vào gold context.
+> Với H01, rủi ro là đánh giá *version* theo ngày nhận hàng thay vì ngày đặt hàng;
+> corpus chỉ rõ triggering event là order-placement date nên expected answer phải nói
+> đúng 21 ngày (v1.0), không phải nhầm với 30 ngày (v2.0).
 
 **Xác nhận:**
 
-- [ ] Mọi claim trong expected answer đều có evidence hỗ trợ.
-- [ ] Không có questions trùng ý và không dùng kiến thức ngoài corpus.
-- [ ] `python validate_golden_dataset.py` báo `PASS`.
+- [x] Mọi claim trong expected answer đều có evidence hỗ trợ.
+- [x] Không có questions trùng ý và không dùng kiến thức ngoài corpus.
+- [x] `python validate_golden_dataset.py` báo `PASS`.
 
 ### Exercise 3.2 — Benchmark Run
 
